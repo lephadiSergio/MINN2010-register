@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geo Attendance System</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(to right, #1e3c72, #2a5298);
+    color: white;
+    text-align: center;
+    padding: 20px;
+}
+.container {
+    background: white;
+    color: black;
+    padding: 25px;
+    border-radius: 15px;
+    max-width: 400px;
+    margin: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+input {
+    width: 95%;
+    padding: 12px;
+    margin: 8px 0;
+}
+button {
+    padding: 12px;
+    width: 100%;
+    background: #2a5298;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+}
+button:disabled {
+    background: grey;
+}
+.hidden {
+    display: none;
+}
+#status {
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+.success {
+    color: green;
+}
+.error {
+    color: red;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Geo-Restricted Attendance</h2>
+<p id="status">Checking your location...</p>
+
+<div id="formSection" class="hidden container">
+<form id="attendanceForm">
+<input type="text" id="name" placeholder="Name" required>
+<input type="text" id="surname" placeholder="Surname" required>
+<input type="text" id="studentNumber" placeholder="Student Number" required>
+<input type="text" id="groupNumber" placeholder="Group Number" required>
+<button id="submitBtn" type="submit">Submit Attendance</button>
+</form>
+</div>
+
+<script>
+
+// 🔴 HOST LOCATION (YOUR COORDINATES)
+const hostLat = -26.191739;
+const hostLon = 28.026895;
+
+const maxDistanceKm = 1;
+
+// 🔴 YOUR APPS SCRIPT URL
+const scriptURL = "https://script.google.com/macros/s/AKfycbzkMcsMK9tW5QwLC93L4hrl-NuJVd3RG7wUOoZ15Flhr6_YAhuWr1MovQwkLQoNwrM/exec";
+
+let userLat;
+let userLon;
+let calculatedDistance;
+
+function toRad(value) {
+    return value * Math.PI / 180;
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// 🔍 LOCATION CHECK
+if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(position) {
+
+        userLat = position.coords.latitude;
+        userLon = position.coords.longitude;
+
+        calculatedDistance = calculateDistance(hostLat, hostLon, userLat, userLon);
+
+        if (calculatedDistance <= maxDistanceKm) {
+            document.getElementById("status").innerHTML =
+                "✅ Within range (" + 
+                (calculatedDistance*1000).toFixed(0) + " meters). You may submit.";
+            document.getElementById("status").className = "success";
+            document.getElementById("formSection").classList.remove("hidden");
+        } else {
+            document.getElementById("status").innerHTML =
+                "❌ Access Denied. You are " + 
+                calculatedDistance.toFixed(2) + 
+                " km away. Must be within 1 km.";
+            document.getElementById("status").className = "error";
+        }
+
+    }, function() {
+        document.getElementById("status").innerHTML =
+            "⚠️ Location permission denied.";
+        document.getElementById("status").className = "error";
+    });
+} else {
+    document.getElementById("status").innerHTML =
+        "Geolocation not supported.";
+}
+
+// 📤 FORM SUBMISSION
+document.getElementById("attendanceForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+
+    const submitBtn = document.getElementById("submitBtn");
+    submitBtn.disabled = true;
+    submitBtn.innerText = "Submitting...";
+
+    const formData = {
+        name: document.getElementById("name").value,
+        surname: document.getElementById("surname").value,
+        studentNumber: document.getElementById("studentNumber").value,
+        groupNumber: document.getElementById("groupNumber").value,
+        latitude: userLat,
+        longitude: userLon,
+        distance: calculatedDistance
+    };
+
+    fetch(scriptURL, {
+        method: "POST",
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById("status").innerHTML =
+            "✅ Attendance submitted successfully!";
+        document.getElementById("status").className = "success";
+        document.getElementById("formSection").classList.add("hidden");
+    })
+    .catch(error => {
+        document.getElementById("status").innerHTML =
+            "❌ Submission failed. Try again.";
+        document.getElementById("status").className = "error";
+        submitBtn.disabled = false;
+        submitBtn.innerText = "Submit Attendance";
+    });
+
+});
+</script>
+
+</body>
+</html>
